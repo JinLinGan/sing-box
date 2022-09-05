@@ -18,6 +18,7 @@ import (
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
+	"github.com/sagernet/sing-tun"
 	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/common/debug"
 	E "github.com/sagernet/sing/common/exceptions"
@@ -26,7 +27,7 @@ import (
 
 	"golang.zx2c4.com/wireguard/conn"
 	"golang.zx2c4.com/wireguard/device"
-	"golang.zx2c4.com/wireguard/tun"
+	wgTun "golang.zx2c4.com/wireguard/tun"
 	"gvisor.dev/gvisor/pkg/bufferv2"
 	"gvisor.dev/gvisor/pkg/tcpip"
 	"gvisor.dev/gvisor/pkg/tcpip/adapters/gonet"
@@ -48,7 +49,7 @@ type WireGuard struct {
 	dialer     N.Dialer
 	endpoint   conn.Endpoint
 	device     *device.Device
-	tunDevice  *wireTunDevice
+	tunDevice  wireDevice
 	connAccess sync.Mutex
 	conn       *wireConn
 }
@@ -73,26 +74,23 @@ func NewWireGuard(ctx context.Context, router adapter.Router, logger log.Context
 		endpointIp = netip.AddrFrom4([4]byte{127, 0, 0, 1})
 	}
 	outbound.endpoint = conn.StdNetEndpoint(netip.AddrPortFrom(endpointIp, outbound.serverAddr.Port))
-	localAddress := make([]tcpip.AddressWithPrefix, len(options.LocalAddress))
-	if len(localAddress) == 0 {
+	localPrefixes := make([]netip.Prefix, len(options.LocalAddress))
+	if len(localPrefixes) == 0 {
 		return nil, E.New("missing local address")
 	}
-	for index, address := range options.LocalAddress {
+	for i, address := range options.LocalAddress {
 		if strings.Contains(address, "/") {
 			prefix, err := netip.ParsePrefix(address)
 			if err != nil {
 				return nil, E.Cause(err, "parse local address prefix ", address)
 			}
-			localAddress[index] = tcpip.AddressWithPrefix{
-				Address:   tcpip.Address(prefix.Addr().AsSlice()),
-				PrefixLen: prefix.Bits(),
-			}
+			localPrefixes[i] = prefix
 		} else {
 			addr, err := netip.ParseAddr(address)
 			if err != nil {
 				return nil, E.Cause(err, "parse local address ", address)
 			}
-			localAddress[index] = tcpip.Address(addr.AsSlice()).WithPrefix()
+			localPrefixes[i], _ = addr.Prefix(addr.BitLen())
 		}
 	}
 	var privateKey, peerPublicKey, preSharedKey string
@@ -124,8 +122,8 @@ func NewWireGuard(ctx context.Context, router adapter.Router, logger log.Context
 		ipcConf += "\npreshared_key=" + preSharedKey
 	}
 	var has4, has6 bool
-	for _, address := range localAddress {
-		if address.Address.To4() != "" {
+	for _, address := range localPrefixes {
+		if address.Addr().Is4() {
 			has4 = true
 		} else {
 			has6 = true
@@ -141,11 +139,17 @@ func NewWireGuard(ctx context.Context, router adapter.Router, logger log.Context
 	if mtu == 0 {
 		mtu = 1408
 	}
-	wireDevice, err := newWireDevice(localAddress, mtu)
-	if err != nil {
-		return nil, err
+	var wireTunDevice wireDevice
+	var err error
+	if options.InterfaceName == "" {
+		wireTunDevice, err = newWireStackDevice(localPrefixes, mtu)
+	} else {
+		wireTunDevice, err = newWireSystemDevice(router, options.InterfaceName, localPrefixes, mtu)
 	}
-	wgDevice := device.NewDevice(wireDevice, (*wireClientBind)(outbound), &device.Logger{
+	if err != nil {
+		return nil, E.Cause(err, "create WireGuard device")
+	}
+	wgDevice := device.NewDevice(wireTunDevice, (*wireClientBind)(outbound), &device.Logger{
 		Verbosef: func(format string, args ...interface{}) {
 			logger.Debug(fmt.Sprintf(strings.ToLower(format), args...))
 		},
@@ -161,7 +165,7 @@ func NewWireGuard(ctx context.Context, router adapter.Router, logger log.Context
 		return nil, E.Cause(err, "setup wireguard")
 	}
 	outbound.device = wgDevice
-	outbound.tunDevice = wireDevice
+	outbound.tunDevice = wireTunDevice
 	return outbound, nil
 }
 
@@ -172,54 +176,19 @@ func (w *WireGuard) DialContext(ctx context.Context, network string, destination
 	case N.NetworkUDP:
 		w.logger.InfoContext(ctx, "outbound packet connection to ", destination)
 	}
-	addr := tcpip.FullAddress{
-		NIC:  defaultNIC,
-		Port: destination.Port,
-	}
 	if destination.IsFqdn() {
 		addrs, err := w.router.LookupDefault(ctx, destination.Fqdn)
 		if err != nil {
 			return nil, err
 		}
-		addr.Addr = tcpip.Address(addrs[0].AsSlice())
-	} else {
-		addr.Addr = tcpip.Address(destination.Addr.AsSlice())
+		return N.DialSerial(ctx, w.tunDevice, network, destination, addrs)
 	}
-	bind := tcpip.FullAddress{
-		NIC: defaultNIC,
-	}
-	var networkProtocol tcpip.NetworkProtocolNumber
-	if destination.IsIPv4() {
-		networkProtocol = header.IPv4ProtocolNumber
-		bind.Addr = w.tunDevice.addr4
-	} else {
-		networkProtocol = header.IPv6ProtocolNumber
-		bind.Addr = w.tunDevice.addr6
-	}
-	switch N.NetworkName(network) {
-	case N.NetworkTCP:
-		return gonet.DialTCPWithBind(ctx, w.tunDevice.stack, bind, addr, networkProtocol)
-	case N.NetworkUDP:
-		return gonet.DialUDP(w.tunDevice.stack, &bind, &addr, networkProtocol)
-	default:
-		return nil, E.Extend(N.ErrUnknownNetwork, network)
-	}
+	return w.tunDevice.DialContext(ctx, network, destination)
 }
 
 func (w *WireGuard) ListenPacket(ctx context.Context, destination M.Socksaddr) (net.PacketConn, error) {
 	w.logger.InfoContext(ctx, "outbound packet connection to ", destination)
-	bind := tcpip.FullAddress{
-		NIC: defaultNIC,
-	}
-	var networkProtocol tcpip.NetworkProtocolNumber
-	if destination.IsIPv4() || w.tunDevice.addr6 == "" {
-		networkProtocol = header.IPv4ProtocolNumber
-		bind.Addr = w.tunDevice.addr4
-	} else {
-		networkProtocol = header.IPv6ProtocolNumber
-		bind.Addr = w.tunDevice.addr6
-	}
-	return gonet.DialUDP(w.tunDevice.stack, &bind, nil, networkProtocol)
+	return w.tunDevice.ListenPacket(ctx, destination)
 }
 
 func (w *WireGuard) NewConnection(ctx context.Context, conn net.Conn, metadata adapter.InboundContext) error {
@@ -231,13 +200,13 @@ func (w *WireGuard) NewPacketConnection(ctx context.Context, conn N.PacketConn, 
 }
 
 func (w *WireGuard) Start() error {
-	w.tunDevice.events <- tun.EventUp
+	w.tunDevice.Start()
 	return nil
 }
 
 func (w *WireGuard) Close() error {
 	return common.Close(
-		common.PtrOrNil(w.tunDevice),
+		w.tunDevice,
 		common.PtrOrNil(w.device),
 		common.PtrOrNil(w.conn),
 	)
@@ -352,14 +321,104 @@ func (w *wireConn) Close() error {
 	return nil
 }
 
-var _ tun.Device = (*wireTunDevice)(nil)
+type wireDevice interface {
+	wgTun.Device
+	Start()
+	N.Dialer
+}
+
+var _ wireDevice = (*wireSystemDevice)(nil)
+
+type wireSystemDevice struct {
+	dialer N.Dialer
+	device tun.Tun
+	name   string
+	mtu    int
+	events chan wgTun.Event
+}
+
+func newWireSystemDevice(router adapter.Router, interfaceName string, localPrefixes []netip.Prefix, mtu uint32) (*wireSystemDevice, error) {
+	var inet4Addresses []netip.Prefix
+	var inet6Addresses []netip.Prefix
+	for _, prefixes := range localPrefixes {
+		if prefixes.Addr().Is4() {
+			inet4Addresses = append(inet4Addresses, prefixes)
+		} else {
+			inet6Addresses = append(inet6Addresses, prefixes)
+		}
+	}
+	if interfaceName == "" {
+		interfaceName = tun.CalculateInterfaceName("wg")
+	}
+	tunInterface, err := tun.Open(tun.Options{
+		Name:         interfaceName,
+		Inet4Address: inet4Addresses,
+		Inet6Address: inet6Addresses,
+		MTU:          mtu,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &wireSystemDevice{
+		dialer.NewDefault(router, option.DialerOptions{
+			BindInterface: interfaceName,
+		}),
+		tunInterface, interfaceName, int(mtu), make(chan wgTun.Event),
+	}, nil
+}
+
+func (w *wireSystemDevice) DialContext(ctx context.Context, network string, destination M.Socksaddr) (net.Conn, error) {
+	return w.dialer.DialContext(ctx, network, destination)
+}
+
+func (w *wireSystemDevice) ListenPacket(ctx context.Context, destination M.Socksaddr) (net.PacketConn, error) {
+	return w.dialer.ListenPacket(ctx, destination)
+}
+
+func (w *wireSystemDevice) Start() {
+	w.events <- wgTun.EventUp
+}
+
+func (w *wireSystemDevice) File() *os.File {
+	return nil
+}
+
+func (w *wireSystemDevice) Read(bytes []byte, index int) (int, error) {
+	return w.device.Read(bytes[index-tunPacketOffset:])
+}
+
+func (w *wireSystemDevice) Write(bytes []byte, index int) (int, error) {
+	return w.device.Write(bytes[index:])
+}
+
+func (w *wireSystemDevice) Flush() error {
+	return nil
+}
+
+func (w *wireSystemDevice) MTU() (int, error) {
+	return w.mtu, nil
+}
+
+func (w *wireSystemDevice) Name() (string, error) {
+	return w.name, nil
+}
+
+func (w *wireSystemDevice) Events() chan wgTun.Event {
+	return w.events
+}
+
+func (w *wireSystemDevice) Close() error {
+	return w.device.Close()
+}
+
+var _ wireDevice = (*wireStackDevice)(nil)
 
 const defaultNIC tcpip.NICID = 1
 
-type wireTunDevice struct {
+type wireStackDevice struct {
 	stack      *stack.Stack
 	mtu        uint32
-	events     chan tun.Event
+	events     chan wgTun.Event
 	outbound   chan *stack.PacketBuffer
 	dispatcher stack.NetworkDispatcher
 	done       chan struct{}
@@ -367,16 +426,16 @@ type wireTunDevice struct {
 	addr6      tcpip.Address
 }
 
-func newWireDevice(localAddresses []tcpip.AddressWithPrefix, mtu uint32) (*wireTunDevice, error) {
+func newWireStackDevice(localAddresses []netip.Prefix, mtu uint32) (*wireStackDevice, error) {
 	ipStack := stack.New(stack.Options{
 		NetworkProtocols:   []stack.NetworkProtocolFactory{ipv4.NewProtocol, ipv6.NewProtocol},
 		TransportProtocols: []stack.TransportProtocolFactory{tcp.NewProtocol, udp.NewProtocol, icmp.NewProtocol4, icmp.NewProtocol6},
 		HandleLocal:        true,
 	})
-	tunDevice := &wireTunDevice{
+	tunDevice := &wireStackDevice{
 		stack:    ipStack,
 		mtu:      mtu,
-		events:   make(chan tun.Event, 4),
+		events:   make(chan wgTun.Event, 4),
 		outbound: make(chan *stack.PacketBuffer, 256),
 		done:     make(chan struct{}),
 	}
@@ -384,20 +443,20 @@ func newWireDevice(localAddresses []tcpip.AddressWithPrefix, mtu uint32) (*wireT
 	if err != nil {
 		return nil, E.New(err.String())
 	}
-	for _, addr := range localAddresses {
-		var protoAddr tcpip.ProtocolAddress
-		if len(addr.Address) == net.IPv4len {
-			tunDevice.addr4 = addr.Address
-			protoAddr = tcpip.ProtocolAddress{
-				Protocol:          ipv4.ProtocolNumber,
-				AddressWithPrefix: addr,
-			}
+	for _, prefix := range localAddresses {
+		addr := tcpip.Address(prefix.Addr().AsSlice())
+		protoAddr := tcpip.ProtocolAddress{
+			AddressWithPrefix: tcpip.AddressWithPrefix{
+				Address:   addr,
+				PrefixLen: prefix.Bits(),
+			},
+		}
+		if prefix.Addr().Is4() {
+			tunDevice.addr4 = addr
+			protoAddr.Protocol = ipv4.ProtocolNumber
 		} else {
-			tunDevice.addr6 = addr.Address
-			protoAddr = tcpip.ProtocolAddress{
-				Protocol:          ipv6.ProtocolNumber,
-				AddressWithPrefix: addr,
-			}
+			tunDevice.addr6 = addr
+			protoAddr.Protocol = ipv6.ProtocolNumber
 		}
 		err = ipStack.AddProtocolAddress(defaultNIC, protoAddr, stack.AddressProperties{})
 		if err != nil {
@@ -413,11 +472,57 @@ func newWireDevice(localAddresses []tcpip.AddressWithPrefix, mtu uint32) (*wireT
 	return tunDevice, nil
 }
 
-func (w *wireTunDevice) File() *os.File {
+func (w *wireStackDevice) DialContext(ctx context.Context, network string, destination M.Socksaddr) (net.Conn, error) {
+	addr := tcpip.FullAddress{
+		NIC:  defaultNIC,
+		Port: destination.Port,
+		Addr: tcpip.Address(destination.Addr.AsSlice()),
+	}
+	bind := tcpip.FullAddress{
+		NIC: defaultNIC,
+	}
+	var networkProtocol tcpip.NetworkProtocolNumber
+	if destination.IsIPv4() {
+		networkProtocol = header.IPv4ProtocolNumber
+		bind.Addr = w.addr4
+	} else {
+		networkProtocol = header.IPv6ProtocolNumber
+		bind.Addr = w.addr6
+	}
+	switch N.NetworkName(network) {
+	case N.NetworkTCP:
+		return gonet.DialTCPWithBind(ctx, w.stack, bind, addr, networkProtocol)
+	case N.NetworkUDP:
+		return gonet.DialUDP(w.stack, &bind, &addr, networkProtocol)
+	default:
+		return nil, E.Extend(N.ErrUnknownNetwork, network)
+	}
+}
+
+func (w *wireStackDevice) ListenPacket(ctx context.Context, destination M.Socksaddr) (net.PacketConn, error) {
+	bind := tcpip.FullAddress{
+		NIC: defaultNIC,
+	}
+	var networkProtocol tcpip.NetworkProtocolNumber
+	if destination.IsIPv4() || w.addr6 == "" {
+		networkProtocol = header.IPv4ProtocolNumber
+		bind.Addr = w.addr4
+	} else {
+		networkProtocol = header.IPv6ProtocolNumber
+		bind.Addr = w.addr6
+	}
+	return gonet.DialUDP(w.stack, &bind, nil, networkProtocol)
+}
+
+func (w *wireStackDevice) Start() {
+	w.events <- wgTun.EventUp
+}
+
+func (w *wireStackDevice) File() *os.File {
 	return nil
 }
 
-func (w *wireTunDevice) Read(p []byte, offset int) (n int, err error) {
+func (w *wireStackDevice) Read(p []byte, offset int) (n int, err error) {
 	packetBuffer, ok := <-w.outbound
 	if !ok {
 		return 0, os.ErrClosed
@@ -430,7 +535,7 @@ func (w *wireTunDevice) Read(p []byte, offset int) (n int, err error) {
 	return
 }
 
-func (w *wireTunDevice) Write(p []byte, offset int) (n int, err error) {
+func (w *wireStackDevice) Write(p []byte, offset int) (n int, err error) {
 	p = p[offset:]
 	if len(p) == 0 {
 		return
@@ -451,23 +556,23 @@ func (w *wireTunDevice) Write(p []byte, offset int) (n int, err error) {
 	return
 }
 
-func (w *wireTunDevice) Flush() error {
+func (w *wireStackDevice) Flush() error {
 	return nil
 }
 
-func (w *wireTunDevice) MTU() (int, error) {
+func (w *wireStackDevice) MTU() (int, error) {
 	return int(w.mtu), nil
 }
 
-func (w *wireTunDevice) Name() (string, error) {
+func (w *wireStackDevice) Name() (string, error) {
 	return "sing-box", nil
 }
 
-func (w *wireTunDevice) Events() chan tun.Event {
+func (w *wireStackDevice) Events() chan wgTun.Event {
 	return w.events
 }
 
-func (w *wireTunDevice) Close() error {
+func (w *wireStackDevice) Close() error {
 	select {
 	case <-w.done:
 		return os.ErrClosed
@@ -485,7 +590,7 @@ func (w *wireTunDevice) Close() error {
 
 var _ stack.LinkEndpoint = (*wireEndpoint)(nil)
 
-type wireEndpoint wireTunDevice
+type wireEndpoint wireStackDevice
 
 func (ep *wireEndpoint) MTU() uint32 {
 	return ep.mtu
