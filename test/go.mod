@@ -10,7 +10,7 @@ require (
 	github.com/docker/docker v20.10.17+incompatible
 	github.com/docker/go-connections v0.4.0
 	github.com/gofrs/uuid v4.2.0+incompatible
-	github.com/sagernet/sing v0.0.0-20220903084300-856852af9306
+	github.com/sagernet/sing v0.0.0-20220903085538-02b9ca1cc133
 	github.com/sagernet/sing-shadowsocks v0.0.0-20220819002358-7461bb09a8f6
 	github.com/spyzhov/ajson v0.7.1
 	github.com/stretchr/testify v1.8.0
@@ -18,6 +18,12 @@ require (
 )
 
 //replace github.com/sagernet/sing => ../../sing
+//replace github.com/sagernet/sing-dns => ../../sing-dns
+//replace github.com/sagernet/sing-shadowsocks => ../../sing-shadowsocks
+//replace github.com/sagernet/sing-tun => ../../sing-tun
+//replace github.com/sagernet/sing-vmess => ../../sing-vmess
+//replace github.com/sagernet/smux => ../../smux
+//replace github.com/sagernet/certmagic => ../../certmagic
 
 require (
 	berty.tech/go-libtor v1.0.385 // indirect
@@ -63,7 +69,7 @@ require (
 	github.com/sagernet/quic-go v0.0.0-20220818150011-de611ab3e2bb // indirect
 	github.com/sagernet/sing-dns v0.0.0-20220903082137-b1102b8fc961 // indirect
 	github.com/sagernet/sing-tun v0.0.0-20220828031750-185b6c880a83 // indirect
-	github.com/sagernet/sing-vmess v0.0.0-20220903084336-d856911141f3 // indirect
+	github.com/sagernet/sing-vmess v0.0.0-20220903085707-c32fca59bfa1 // indirect
 	github.com/sagernet/smux v0.0.0-20220831015742-e0f1988e3195 // indirect
 	github.com/sirupsen/logrus v1.8.1 // indirect
 	github.com/vishvananda/netns v0.0.0-20211101163701-50045581ed74 // indirect
@@ -79,7 +85,7 @@ require (
 	golang.org/x/time v0.0.0-20191024005414-555d28b269f0 // indirect
 	golang.org/x/tools v0.1.11-0.20220513221640-090b14e8501f // indirect
 	golang.zx2c4.com/wintun v0.0.0-20211104114900-415007cec224 // indirect
-	golang.zx2c4.com/wireguard v0.0.0-20220829161405-d1d08426b27b // indirect
+	golang.zx2c4.com/wireguard v0.0.0-20220904105730-b51010ba13f0 // indirect
 	google.golang.org/genproto v0.0.0-20210722135532-667f2b7c528f // indirect
 	google.golang.org/grpc v1.49.0 // indirect
 	google.golang.org/protobuf v1.28.1 // indirect

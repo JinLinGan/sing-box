@@ -20,10 +20,10 @@ require (
 	github.com/pires/go-proxyproto v0.6.2
 	github.com/sagernet/certmagic v0.0.0-20220819042630-4a57f8b6853a
 	github.com/sagernet/quic-go v0.0.0-20220818150011-de611ab3e2bb
-	github.com/sagernet/sing v0.0.0-20220903085538-02b9ca1cc133
+	github.com/sagernet/sing v0.0.0-20220905041854-6f8d090cec34
 	github.com/sagernet/sing-dns v0.0.0-20220822023312-3e086b06d666
 	github.com/sagernet/sing-shadowsocks v0.0.0-20220819002358-7461bb09a8f6
-	github.com/sagernet/sing-tun v0.0.0-20220828031750-185b6c880a83
+	github.com/sagernet/sing-tun v0.0.0-20220905130327-bc55ff110e21
 	github.com/sagernet/sing-vmess v0.0.0-20220903085707-c32fca59bfa1
 	github.com/sagernet/smux v0.0.0-20220831015742-e0f1988e3195
 	github.com/spf13/cobra v1.5.0
@@ -33,13 +33,20 @@ require (
 	golang.org/x/crypto v0.0.0-20220829220503-c86fa9a7ed90
 	golang.org/x/net v0.0.0-20220826154423-83b083e8dc8b
 	golang.org/x/sys v0.0.0-20220829200755-d48e67d00261
-	golang.zx2c4.com/wireguard v0.0.0-20220829161405-d1d08426b27b
+	golang.zx2c4.com/wireguard v0.0.0-20220904105730-b51010ba13f0
 	google.golang.org/grpc v1.49.0
 	google.golang.org/protobuf v1.28.1
 	gvisor.dev/gvisor v0.0.0-20220819163037-ba6e795b139a
 )
 
 //replace github.com/sagernet/sing => ../sing
+//replace github.com/sagernet/sing-dns => ../sing-dns
+//replace github.com/sagernet/sing-shadowsocks => ../sing-shadowsocks
+//replace github.com/sagernet/sing-tun => ../sing-tun
+//replace github.com/sagernet/sing-vmess => ../sing-vmess
+//replace github.com/sagernet/smux => ../smux
+//replace github.com/sagernet/certmagic => ../certmagic
+//replace github.com/sagernet/netlink => ../netlink
 
 require (
 	github.com/ajg/form v1.5.1 // indirect
@@ -59,7 +66,7 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/sagernet/abx-go v0.0.0-20220819185957-dba1257d738e // indirect
 	github.com/sagernet/go-tun2socks v1.16.12-0.20220818015926-16cb67876a61 // indirect
-	github.com/sagernet/netlink v0.0.0-20220826133217-3fb4ff92ea17 // indirect
+	github.com/sagernet/netlink v0.0.0-20220905062125-8043b4a9aa97 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/vishvananda/netns v0.0.0-20211101163701-50045581ed74 // indirect
 	go.uber.org/multierr v1.6.0 // indirect
