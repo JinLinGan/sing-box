@@ -1,5 +1,5 @@
 //go:build !darwin
 
-package outbound
+package wireguard
 
 const tunPacketOffset = 0

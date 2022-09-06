@@ -1,3 +1,3 @@
-package outbound
+package wireguard
 
 const tunPacketOffset = 4
