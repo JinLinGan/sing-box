@@ -87,6 +87,7 @@ func NewTun(ctx context.Context, router adapter.Router, logger log.ContextLogger
 			IncludePackage:     options.IncludePackage,
 			ExcludePackage:     options.ExcludePackage,
 			InterfaceMonitor:   router.InterfaceMonitor(),
+			TableIndex:         2022,
 		},
 		endpointIndependentNat: options.EndpointIndependentNat,
 		udpTimeout:             udpTimeout,
