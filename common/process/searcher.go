@@ -21,6 +21,7 @@ type Config struct {
 }
 
 type Info struct {
+	PID         uint32
 	ProcessPath string
 	PackageName string
 	User        string

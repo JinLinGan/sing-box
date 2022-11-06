@@ -104,6 +104,8 @@ type DefaultRule struct {
 	ClashMode       string           `json:"clash_mode,omitempty"`
 	Invert          bool             `json:"invert,omitempty"`
 	Outbound        string           `json:"outbound,omitempty"`
+
+	PID Listable[uint32] `json:"pid,omitempty"`
 }
 
 func (r DefaultRule) IsValid() bool {

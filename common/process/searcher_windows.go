@@ -63,15 +63,20 @@ func initWin32API() error {
 	return nil
 }
 
+type processInfo struct {
+	Name string
+	Pid  uint32
+}
+
 func (s *windowsSearcher) FindProcessInfo(ctx context.Context, network string, source netip.AddrPort, destination netip.AddrPort) (*Info, error) {
-	processName, err := findProcessName(network, source.Addr(), int(source.Port()))
+	pInfo, err := findProcessName(network, source.Addr(), int(source.Port()))
 	if err != nil {
 		return nil, err
 	}
-	return &Info{ProcessPath: processName, UserId: -1}, nil
+	return &Info{ProcessPath: pInfo.Name, UserId: -1, PID: pInfo.Pid}, nil
 }
 
-func findProcessName(network string, ip netip.Addr, srcPort int) (string, error) {
+func findProcessName(network string, ip netip.Addr, srcPort int) (*processInfo, error) {
 	family := windows.AF_INET
 	if ip.Is6() {
 		family = windows.AF_INET6
@@ -92,21 +97,28 @@ func findProcessName(network string, ip netip.Addr, srcPort int) (string, error)
 		fn = procGetExtendedUdpTable.Addr()
 		class = udpTablePid
 	default:
-		return "", os.ErrInvalid
+		return nil, os.ErrInvalid
 	}
 
 	buf, err := getTransportTable(fn, family, class)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	s := newSearcher(family == windows.AF_INET, network == N.NetworkTCP)
 
 	pid, err := s.Search(buf, ip, uint16(srcPort))
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return getExecPathFromPID(pid)
+	path, err := getExecPathFromPID(pid)
+	if err != nil {
+		return nil, err
+	}
+	return &processInfo{
+		Name: path,
+		Pid:  pid,
+	}, err
 }
 
 type searcher struct {

@@ -23,12 +23,17 @@ func NewSearcher(_ Config) (Searcher, error) {
 	return &darwinSearcher{}, nil
 }
 
+type processInfo struct {
+	Name string
+	Pid  uint32
+}
+
 func (d *darwinSearcher) FindProcessInfo(ctx context.Context, network string, source netip.AddrPort, destination netip.AddrPort) (*Info, error) {
-	processName, err := findProcessName(network, source.Addr(), int(source.Port()))
+	processInfo, err := findProcessName(network, source.Addr(), int(source.Port()))
 	if err != nil {
 		return nil, err
 	}
-	return &Info{ProcessPath: processName, UserId: -1}, nil
+	return &Info{ProcessPath: processInfo.Name, PID: processInfo.Pid, UserId: -1}, nil
 }
 
 var structSize = func() int {
@@ -47,7 +52,7 @@ var structSize = func() int {
 	}
 }()
 
-func findProcessName(network string, ip netip.Addr, port int) (string, error) {
+func findProcessName(network string, ip netip.Addr, port int) (*processInfo, error) {
 	var spath string
 	switch network {
 	case N.NetworkTCP:
@@ -55,14 +60,14 @@ func findProcessName(network string, ip netip.Addr, port int) (string, error) {
 	case N.NetworkUDP:
 		spath = "net.inet.udp.pcblist_n"
 	default:
-		return "", os.ErrInvalid
+		return nil, os.ErrInvalid
 	}
 
 	isIPv4 := ip.Is4()
 
 	value, err := syscall.Sysctl(spath)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	buf := []byte(value)
@@ -71,7 +76,7 @@ func findProcessName(network string, ip netip.Addr, port int) (string, error) {
 	// size/offset are round up (aligned) to 8 bytes in darwin
 	// rup8(sizeof(xinpcb_n)) + rup8(sizeof(xsocket_n)) +
 	// 2 * rup8(sizeof(xsockbuf_n)) + rup8(sizeof(xsockstat_n))
-	itemSize := structSize
+	itemSize := 384
 	if network == N.NetworkTCP {
 		// rup8(sizeof(xtcpcb_n))
 		itemSize += 208
@@ -101,7 +106,7 @@ func findProcessName(network string, ip netip.Addr, port int) (string, error) {
 			continue
 		}
 
-		if ip != srcIP {
+		if !srcIP.IsUnspecified() && ip != srcIP {
 			continue
 		}
 
@@ -110,10 +115,10 @@ func findProcessName(network string, ip netip.Addr, port int) (string, error) {
 		return getExecPathFromPID(pid)
 	}
 
-	return "", ErrNotFound
+	return nil, ErrNotFound
 }
 
-func getExecPathFromPID(pid uint32) (string, error) {
+func getExecPathFromPID(pid uint32) (*processInfo, error) {
 	const (
 		procpidpathinfo     = 0xb
 		procpidpathinfosize = 1024
@@ -129,10 +134,13 @@ func getExecPathFromPID(pid uint32) (string, error) {
 		uintptr(unsafe.Pointer(&buf[0])),
 		procpidpathinfosize)
 	if errno != 0 {
-		return "", errno
+		return nil, errno
 	}
 
-	return unix.ByteSliceToString(buf), nil
+	return &processInfo{
+		Name: unix.ByteSliceToString(buf),
+		Pid:  pid,
+	}, nil
 }
 
 func readNativeUint32(b []byte) uint32 {
