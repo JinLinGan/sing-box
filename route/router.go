@@ -2,6 +2,7 @@ package route
 
 import (
 	"context"
+	"github.com/miekg/dns"
 	"io"
 	"net"
 	"net/http"
@@ -24,9 +25,6 @@ import (
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
-	"github.com/sagernet/sing-dns"
-	"github.com/sagernet/sing-tun"
-	"github.com/sagernet/sing-vmess"
 	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/common/buf"
 	"github.com/sagernet/sing/common/bufio"
@@ -679,6 +677,9 @@ func (r *Router) match(ctx context.Context, metadata *adapter.InboundContext, de
 		if err != nil {
 			r.logger.InfoContext(ctx, "failed to search process: ", err)
 		} else {
+			if processInfo.PID != 0 {
+				r.logger.InfoContext(ctx, "found process id: ", processInfo.PID)
+			}
 			if processInfo.ProcessPath != "" {
 				r.logger.InfoContext(ctx, "found process path: ", processInfo.ProcessPath)
 			} else if processInfo.PackageName != "" {
