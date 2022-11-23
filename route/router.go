@@ -2,7 +2,9 @@ package route
 
 import (
 	"context"
-	"github.com/miekg/dns"
+	dns "github.com/sagernet/sing-dns"
+	tun "github.com/sagernet/sing-tun"
+	vmess "github.com/sagernet/sing-vmess"
 	"io"
 	"net"
 	"net/http"
