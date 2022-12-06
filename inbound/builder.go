@@ -24,7 +24,7 @@ func New(ctx context.Context, router adapter.Router, logger log.ContextLogger, o
 	case C.TypeDirect:
 		return NewDirect(ctx, router, logger, options.Tag, options.DirectOptions), nil
 	case C.TypeSocks:
-		return NewSocks(ctx, router, logger, options.Tag, options.SocksOptions), nil
+		return NewSocks(ctx, router, logger, options.Tag, options.SocksOptions)
 	case C.TypeHTTP:
 		return NewHTTP(ctx, router, logger, options.Tag, options.HTTPOptions)
 	case C.TypeMixed:

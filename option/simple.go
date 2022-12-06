@@ -4,7 +4,8 @@ import "github.com/sagernet/sing/common/auth"
 
 type SocksInboundOptions struct {
 	ListenOptions
-	Users []auth.User `json:"users,omitempty"`
+	Users []auth.User        `json:"users,omitempty"`
+	TLS   *InboundTLSOptions `json:"tls,omitempty"`
 }
 
 type HTTPMixedInboundOptions struct {
@@ -17,11 +18,12 @@ type HTTPMixedInboundOptions struct {
 type SocksOutboundOptions struct {
 	DialerOptions
 	ServerOptions
-	Version  string      `json:"version,omitempty"`
-	Username string      `json:"username,omitempty"`
-	Password string      `json:"password,omitempty"`
-	Network  NetworkList `json:"network,omitempty"`
-	UoT      bool        `json:"udp_over_tcp,omitempty"`
+	Version  string              `json:"version,omitempty"`
+	Username string              `json:"username,omitempty"`
+	Password string              `json:"password,omitempty"`
+	Network  NetworkList         `json:"network,omitempty"`
+	UoT      bool                `json:"udp_over_tcp,omitempty"`
+	TLS      *OutboundTLSOptions `json:"tls,omitempty"`
 }
 
 type HTTPOutboundOptions struct {

@@ -2,6 +2,9 @@ package inbound
 
 import (
 	"context"
+	"github.com/sagernet/sing-box/common/tls"
+	"github.com/sagernet/sing/common"
+	E "github.com/sagernet/sing/common/exceptions"
 	"net"
 	"os"
 
@@ -22,11 +25,12 @@ var (
 type Socks struct {
 	myInboundAdapter
 	authenticator auth.Authenticator
+	tlsConfig     tls.ServerConfig
 }
 
-func NewSocks(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.SocksInboundOptions) *Socks {
+func NewSocks(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.SocksInboundOptions) (*Socks, error) {
 	inbound := &Socks{
-		myInboundAdapter{
+		myInboundAdapter: myInboundAdapter{
 			protocol:      C.TypeSocks,
 			network:       []string{N.NetworkTCP},
 			ctx:           ctx,
@@ -35,13 +39,46 @@ func NewSocks(ctx context.Context, router adapter.Router, logger log.ContextLogg
 			tag:           tag,
 			listenOptions: options.ListenOptions,
 		},
-		auth.NewAuthenticator(options.Users),
+		authenticator: auth.NewAuthenticator(options.Users),
 	}
+	if options.TLS != nil {
+		tlsConfig, err := tls.NewServer(ctx, logger, common.PtrValueOrDefault(options.TLS))
+		if err != nil {
+			return nil, err
+		}
+		inbound.tlsConfig = tlsConfig
+	}
+
 	inbound.connHandler = inbound
-	return inbound
+	return inbound, nil
+}
+
+func (h *Socks) Start() error {
+	if h.tlsConfig != nil {
+		err := h.tlsConfig.Start()
+		if err != nil {
+			return E.Cause(err, "create TLS config")
+		}
+	}
+	return h.myInboundAdapter.Start()
+}
+
+func (h *Socks) Close() error {
+	return common.Close(
+		&h.myInboundAdapter,
+		h.tlsConfig,
+	)
 }
 
 func (h *Socks) NewConnection(ctx context.Context, conn net.Conn, metadata adapter.InboundContext) error {
+	var err error
+	if h.tlsConfig != nil {
+		conn, err = tls.ServerHandshake(ctx, conn, h.tlsConfig)
+		if err != nil {
+			return err
+		}
+	}
+
 	return socks.HandleConnection(ctx, conn, h.authenticator, h.upstreamUserHandler(metadata), adapter.UpstreamMetadata(metadata))
 }
 
