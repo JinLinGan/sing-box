@@ -2,6 +2,8 @@ package outbound
 
 import (
 	"context"
+	"github.com/sagernet/sing-box/common/tls"
+	"github.com/sagernet/sing/common"
 	"net"
 
 	"github.com/sagernet/sing-box/adapter"
@@ -26,9 +28,12 @@ type Socks struct {
 }
 
 func NewSocks(router adapter.Router, logger log.ContextLogger, tag string, options option.SocksOutboundOptions) (*Socks, error) {
-	detour := dialer.New(router, options.DialerOptions)
+	detour, err := tls.NewDialerFromOptions(router, dialer.New(router, options.DialerOptions), options.Server, common.PtrValueOrDefault(options.TLS))
+	if err != nil {
+		return nil, err
+	}
+	//detour := dialer.New(router, options.DialerOptions)
 	var version socks.Version
-	var err error
 	if options.Version != "" {
 		version, err = socks.ParseVersion(options.Version)
 	} else {
