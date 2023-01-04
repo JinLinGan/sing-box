@@ -14,6 +14,10 @@ type SelectorOutboundOptions struct {
 	Default   string   `json:"default,omitempty"`
 }
 
+type AutoSelectorOutboundOptions struct {
+	Outbounds []string `json:"outbounds"`
+}
+
 type URLTestOutboundOptions struct {
 	Outbounds []string `json:"outbounds"`
 	URL       string   `json:"url,omitempty"`

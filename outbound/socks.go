@@ -2,9 +2,10 @@ package outbound
 
 import (
 	"context"
+	"net"
+
 	"github.com/sagernet/sing-box/common/tls"
 	"github.com/sagernet/sing/common"
-	"net"
 
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/common/dialer"
@@ -32,7 +33,7 @@ func NewSocks(router adapter.Router, logger log.ContextLogger, tag string, optio
 	if err != nil {
 		return nil, err
 	}
-	//detour := dialer.New(router, options.DialerOptions)
+	// detour := dialer.New(router, options.DialerOptions)
 	var version socks.Version
 	if options.Version != "" {
 		version, err = socks.ParseVersion(options.Version)

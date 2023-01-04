@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"sync"
 
+	"golang.org/x/crypto/ssh"
+
 	"github.com/sagernet/sing-box/adapter"
 	"github.com/sagernet/sing-box/common/dialer"
 	C "github.com/sagernet/sing-box/constant"
@@ -17,8 +19,6 @@ import (
 	E "github.com/sagernet/sing/common/exceptions"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
-
-	"golang.org/x/crypto/ssh"
 )
 
 var (
@@ -166,6 +166,7 @@ func (s *SSH) DialContext(ctx context.Context, network string, destination M.Soc
 	if err != nil {
 		return nil, err
 	}
+	s.logger.InfoContext(ctx, "outbound connection to ", destination)
 	return client.Dial(network, destination.String())
 }
 

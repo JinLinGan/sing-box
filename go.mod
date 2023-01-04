@@ -1,4 +1,4 @@
-module github.com/jinlingan/sing-box
+module github.com/sagernet/sing-box
 
 go 1.18
 

@@ -18,6 +18,12 @@ import (
 	N "github.com/sagernet/sing/common/network"
 )
 
+type contextKey string
+
+const (
+	CtxDialFinishChannelKey contextKey = "DialFinish"
+)
+
 type myOutboundAdapter struct {
 	protocol string
 	network  []string
@@ -50,6 +56,12 @@ func NewConnection(ctx context.Context, this N.Dialer, conn net.Conn, metadata a
 	if err != nil {
 		return N.HandshakeFailure(conn, err)
 	}
+
+	err = checkContext(ctx)
+	if err != nil {
+		return err
+	}
+
 	if cachedReader, isCached := conn.(N.CachedReader); isCached {
 		payload := cachedReader.ReadCached()
 		if payload != nil && !payload.IsEmpty() {
@@ -59,6 +71,7 @@ func NewConnection(ctx context.Context, this N.Dialer, conn net.Conn, metadata a
 			}
 		}
 	}
+
 	return bufio.CopyConn(ctx, conn, outConn)
 }
 
@@ -74,6 +87,12 @@ func NewEarlyConnection(ctx context.Context, this N.Dialer, conn net.Conn, metad
 	if err != nil {
 		return N.HandshakeFailure(conn, err)
 	}
+
+	err = checkContext(ctx)
+	if err != nil {
+		return err
+	}
+
 	return CopyEarlyConn(ctx, conn, outConn)
 }
 
@@ -97,7 +116,34 @@ func NewPacketConnection(ctx context.Context, this N.Dialer, conn N.PacketConn, 
 	case C.ProtocolDNS:
 		ctx, conn = canceler.NewPacketConn(ctx, conn, C.DNSTimeout)
 	}
+
+	err = checkContext(ctx)
+	if err != nil {
+		return err
+	}
+
 	return bufio.CopyPacketConn(ctx, conn, bufio.NewPacketConn(outConn))
+}
+
+func checkContext(ctx context.Context) error {
+	// 给外部发送 Dial 成功信号，通过 CtxDialFinishChannelKey 判断是否需要发送
+
+	value := ctx.Value(CtxDialFinishChannelKey)
+	if dialFinishChan, ok := value.(chan chan struct{}); ok {
+		continueSingle := make(chan struct{})
+
+		dialFinishChan <- continueSingle
+		close(dialFinishChan)
+
+		select {
+		// 外部可能已经超时，不会关闭cc
+		case <-time.After(time.Second):
+			return E.New("context is canceled")
+		case <-continueSingle:
+		}
+	}
+
+	return nil
 }
 
 func CopyEarlyConn(ctx context.Context, conn net.Conn, serverConn net.Conn) error {
@@ -134,5 +180,25 @@ func CopyEarlyConn(ctx context.Context, conn net.Conn, serverConn net.Conn) erro
 	}
 	runtime.KeepAlive(_payload)
 	payload.Release()
+
+	return bufio.CopyConn(ctx, conn, serverConn)
+}
+
+func CopyConn(ctx context.Context, conn net.Conn, serverConn net.Conn) error {
+	err := checkContext(ctx)
+	if err != nil {
+		return err
+	}
+
+	if cachedReader, isCached := conn.(N.CachedReader); isCached {
+		payload := cachedReader.ReadCached()
+		if payload != nil && !payload.IsEmpty() {
+			_, err = serverConn.Write(payload.Bytes())
+			if err != nil {
+				return err
+			}
+		}
+	}
+
 	return bufio.CopyConn(ctx, conn, serverConn)
 }

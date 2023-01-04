@@ -2,6 +2,7 @@ package route
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sagernet/sing-box/adapter"
@@ -63,12 +65,15 @@ var warnFindProcessOnUnsupportedPlatform = warning.New(
 var _ adapter.Router = (*Router)(nil)
 
 type Router struct {
-	ctx                                context.Context
-	logger                             log.ContextLogger
-	dnsLogger                          log.ContextLogger
-	inboundByTag                       map[string]adapter.Inbound
-	outbounds                          []adapter.Outbound
-	outboundByTag                      map[string]adapter.Outbound
+	ctx          context.Context
+	logger       log.ContextLogger
+	dnsLogger    log.ContextLogger
+	inboundByTag map[string]adapter.Inbound
+
+	outboundsLock sync.RWMutex
+	outbounds     []adapter.Outbound
+	outboundByTag map[string]adapter.Outbound
+
 	rules                              []adapter.Rule
 	defaultDetour                      string
 	defaultOutboundForConnection       adapter.Outbound
@@ -488,6 +493,8 @@ func (r *Router) LoadGeosite(code string) (adapter.Rule, error) {
 }
 
 func (r *Router) Outbound(tag string) (adapter.Outbound, bool) {
+	r.outboundsLock.RLock()
+	defer r.outboundsLock.RUnlock()
 	outbound, loaded := r.outboundByTag[tag]
 	return outbound, loaded
 }
@@ -1025,4 +1032,57 @@ func (r *Router) notifyNetworkUpdate(int) error {
 		}
 	}
 	return nil
+}
+
+func (r *Router) AddOutbounds(outbounds []adapter.Outbound, replace bool) error {
+	r.outboundsLock.Lock()
+	defer r.outboundsLock.Unlock()
+
+	if !replace {
+		for _, out := range outbounds {
+			if _, ok := r.outboundByTag[out.Tag()]; ok {
+				return fmt.Errorf("outbound %q allready exists", out.Tag())
+			}
+		}
+	}
+
+	// clean r.outbounds
+	r.outbounds = common.Filter(r.outbounds, func(it adapter.Outbound) bool {
+		for _, outbound := range outbounds {
+			if it.Tag() == outbound.Tag() {
+				common.Close(it)
+				return true
+			}
+		}
+		return false
+	})
+
+	for _, out := range outbounds {
+		r.outbounds = append(r.outbounds, out)
+		r.outboundByTag[out.Tag()] = out
+		err := common.Start(out)
+		if err != nil {
+			r.logger.Error("start outbound error:", err)
+		}
+
+	}
+	return nil
+}
+
+func (r *Router) DeleteOutBounds(outbounds []string) {
+	r.outboundsLock.Lock()
+	defer r.outboundsLock.Unlock()
+
+	r.outbounds = common.Filter(r.outbounds, func(it adapter.Outbound) bool {
+		for _, outbound := range outbounds {
+			if it.Tag() == outbound {
+				common.Close(it)
+				return true
+			}
+		}
+		return false
+	})
+	for _, outbound := range outbounds {
+		delete(r.outboundByTag, outbound)
+	}
 }

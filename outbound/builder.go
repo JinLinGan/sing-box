@@ -47,6 +47,8 @@ func New(ctx context.Context, router adapter.Router, logger log.ContextLogger, o
 		return NewVLESS(ctx, router, logger, options.Tag, options.VLESSOptions)
 	case C.TypeSelector:
 		return NewSelector(router, logger, options.Tag, options.SelectorOptions)
+	case C.TypeAutoSelector:
+		return NewAutoSelector(router, logger, options.Tag, options.AutoSelectorOptions)
 	case C.TypeURLTest:
 		return NewURLTest(router, logger, options.Tag, options.URLTestOptions)
 	default:
