@@ -3,14 +3,6 @@ package main
 import (
 	"bytes"
 	"context"
-	box "github.com/sagernet/sing-box"
-	"github.com/sagernet/sing-box/common/json"
-	"github.com/sagernet/sing-box/constant"
-	"github.com/sagernet/sing-box/log"
-	"github.com/sagernet/sing-box/option"
-	"github.com/sagernet/sing/common/auth"
-	"github.com/sagernet/sing/common/exceptions"
-	"github.com/spf13/cobra"
 	"net"
 	"net/netip"
 	"net/url"
@@ -20,6 +12,15 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+
+	box "github.com/sagernet/sing-box"
+	"github.com/sagernet/sing-box/common/json"
+	"github.com/sagernet/sing-box/constant"
+	"github.com/sagernet/sing-box/log"
+	"github.com/sagernet/sing-box/option"
+	"github.com/sagernet/sing/common/auth"
+	"github.com/sagernet/sing/common/exceptions"
+	"github.com/spf13/cobra"
 )
 
 var (
@@ -28,6 +29,7 @@ var (
 	DumpConfig   bool
 	ConfigPath   string
 )
+
 var commandGo = &cobra.Command{
 	Use:   "go",
 	Short: "模仿 Gost 方式运行",
@@ -74,7 +76,6 @@ func gostRun() error {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	instance, err := box.New(ctx, options)
-
 	if err != nil {
 		cancel()
 		return exceptions.Cause(err, "create service")
@@ -90,7 +91,6 @@ func gostRun() error {
 }
 
 func DumpSingboxConfig(options option.Options) error {
-
 	buffer := new(bytes.Buffer)
 	encoder := json.NewEncoder(buffer)
 	encoder.SetIndent("", "  ")
@@ -134,7 +134,6 @@ func parseOutBound() ([]option.Outbound, error) {
 
 	detourName := ""
 	for i, f := range ForwardArray {
-
 		log.Info("try to parse forward config ", f)
 		u, err := parseUrl(f)
 		if err != nil {
@@ -237,7 +236,6 @@ func parseOutboundHttp(url *url.URL, index int, detourName string, enableTLS boo
 }
 
 func parseOutboundSocks(url *url.URL, index int, detourName string, enableTLS bool) (option.Outbound, error) {
-
 	auth := GetAuthInfoFromUrl(url)
 
 	addr, port, err := GetHostAndPortFromUrl(url)
@@ -296,7 +294,6 @@ func parseInbound() ([]option.Inbound, error) {
 
 func GetInboundFromURL(url *url.URL, index int) (option.Inbound, error) {
 	switch strings.ToLower(url.Scheme) {
-
 	case constant.TypeSocks, "socks5":
 		return parseInboundSocks(url, index, false)
 	case "ssl":
@@ -406,7 +403,6 @@ func parseInboundSocks(url *url.URL, index int, enableTLS bool) (option.Inbound,
 }
 
 func GetHostAndPortFromUrl(url *url.URL) (netip.Addr, uint16, error) {
-
 	host, p, err := net.SplitHostPort(url.Host)
 	if err != nil {
 		return netip.Addr{}, 0, exceptions.Cause(err, "get inbound config error")

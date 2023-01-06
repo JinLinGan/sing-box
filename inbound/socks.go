@@ -2,11 +2,12 @@ package inbound
 
 import (
 	"context"
+	"net"
+	"os"
+
 	"github.com/sagernet/sing-box/common/tls"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
-	"net"
-	"os"
 
 	"github.com/sagernet/sing-box/adapter"
 	C "github.com/sagernet/sing-box/constant"
