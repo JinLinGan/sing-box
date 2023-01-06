@@ -102,9 +102,12 @@ type Router struct {
 	processSearcher                    process.Searcher
 	clashServer                        adapter.ClashServer
 	v2rayServer                        adapter.V2RayServer
+
+	// 启用本地dns
+	enableLocalDNS bool
 }
 
-func NewRouter(ctx context.Context, logFactory log.Factory, options option.RouteOptions, dnsOptions option.DNSOptions, inbounds []option.Inbound) (*Router, error) {
+func NewRouter(ctx context.Context, logFactory log.Factory, options option.RouteOptions, dnsOptions option.DNSOptions, inbounds []option.Inbound, enableLocalDNS bool) (*Router, error) {
 	if options.DefaultInterface != "" {
 		warnDefaultInterfaceOnUnsupportedPlatform.Check()
 	}
@@ -133,6 +136,7 @@ func NewRouter(ctx context.Context, logFactory log.Factory, options option.Route
 		autoDetectInterface:   options.AutoDetectInterface,
 		defaultInterface:      options.DefaultInterface,
 		defaultMark:           options.DefaultMark,
+		enableLocalDNS:        enableLocalDNS,
 	}
 	for i, ruleOptions := range options.Rules {
 		routeRule, err := NewRule(router, router.logger, ruleOptions)
@@ -570,7 +574,8 @@ func (r *Router) RouteConnection(ctx context.Context, conn net.Conn, metadata ad
 			buffer.Release()
 		}
 	}
-	if metadata.Destination.IsFqdn() && dns.DomainStrategy(metadata.InboundOptions.DomainStrategy) != dns.DomainStrategyAsIS {
+	if metadata.Destination.IsFqdn() &&
+		(dns.DomainStrategy(metadata.InboundOptions.DomainStrategy) != dns.DomainStrategyAsIS || r.enableLocalDNS) {
 		addresses, err := r.Lookup(adapter.WithContext(ctx, &metadata), metadata.Destination.Fqdn, dns.DomainStrategy(metadata.InboundOptions.DomainStrategy))
 		if err != nil {
 			return err
@@ -648,7 +653,8 @@ func (r *Router) RoutePacketConnection(ctx context.Context, conn N.PacketConn, m
 		}
 		conn = bufio.NewCachedPacketConn(conn, buffer, destination)
 	}
-	if metadata.Destination.IsFqdn() && metadata.Destination.Fqdn != uot.UOTMagicAddress && dns.DomainStrategy(metadata.InboundOptions.DomainStrategy) != dns.DomainStrategyAsIS {
+	if metadata.Destination.IsFqdn() && metadata.Destination.Fqdn != uot.UOTMagicAddress &&
+		(dns.DomainStrategy(metadata.InboundOptions.DomainStrategy) != dns.DomainStrategyAsIS || r.enableLocalDNS) {
 		addresses, err := r.Lookup(adapter.WithContext(ctx, &metadata), metadata.Destination.Fqdn, dns.DomainStrategy(metadata.InboundOptions.DomainStrategy))
 		if err != nil {
 			return err
