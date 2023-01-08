@@ -1,6 +1,8 @@
 package option
 
-import "github.com/sagernet/sing/common/auth"
+import (
+	"github.com/sagernet/sing/common/auth"
+)
 
 type SocksInboundOptions struct {
 	ListenOptions
@@ -29,7 +31,8 @@ type SocksOutboundOptions struct {
 type HTTPOutboundOptions struct {
 	DialerOptions
 	ServerOptions
-	Username string              `json:"username,omitempty"`
-	Password string              `json:"password,omitempty"`
-	TLS      *OutboundTLSOptions `json:"tls,omitempty"`
+	Username       string              `json:"username,omitempty"`
+	Password       string              `json:"password,omitempty"`
+	TLS            *OutboundTLSOptions `json:"tls,omitempty"`
+	EnableAutoMode bool                `json:"auto_mode,omitempty"`
 }

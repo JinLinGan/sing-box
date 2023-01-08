@@ -101,6 +101,7 @@ func New(ctx context.Context, options option.Options) (*Box, error) {
 		common.PtrValueOrDefault(options.Route),
 		common.PtrValueOrDefault(options.DNS),
 		options.Inbounds,
+		false,
 	)
 	if err != nil {
 		return nil, E.Cause(err, "parse route options")

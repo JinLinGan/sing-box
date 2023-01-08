@@ -32,6 +32,8 @@ type HTTP struct {
 	// 保存detour 用于非conn模式（中间人模式）
 	detour     N.Dialer
 	serverAddr M.Socksaddr
+
+	autoMode bool
 }
 
 func NewHTTP(router adapter.Router, logger log.ContextLogger, tag string, options option.HTTPOutboundOptions) (*HTTP, error) {
@@ -57,6 +59,7 @@ func NewHTTP(router adapter.Router, logger log.ContextLogger, tag string, option
 		authStr,
 		detour,
 		serverAddr,
+		options.EnableAutoMode,
 	}, nil
 }
 
@@ -73,7 +76,7 @@ func (h *HTTP) ListenPacket(ctx context.Context, destination M.Socksaddr) (net.P
 }
 
 func (h *HTTP) NewConnection(ctx context.Context, conn net.Conn, metadata adapter.InboundContext) error {
-	if metadata.Protocol == C.ProtocolHTTP {
+	if h.autoMode && metadata.Protocol == C.ProtocolHTTP {
 		outConn, err := h.detour.DialContext(ctx, N.NetworkTCP, h.serverAddr)
 		if err != nil {
 			return err
@@ -103,7 +106,6 @@ type (
 		reqProc *requestProcesser
 
 		// 新增一个连接
-
 		// 代表原始客户连接，仅读取行为有差别
 		net.Conn
 
