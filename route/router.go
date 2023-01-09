@@ -107,7 +107,7 @@ type Router struct {
 	enableLocalDNS bool
 }
 
-func NewRouter(ctx context.Context, logFactory log.Factory, options option.RouteOptions, dnsOptions option.DNSOptions, inbounds []option.Inbound, enableLocalDNS bool) (*Router, error) {
+func NewRouter(ctx context.Context, logFactory log.Factory, options option.RouteOptions, dnsOptions option.DNSOptions, inbounds []option.Inbound) (*Router, error) {
 	if options.DefaultInterface != "" {
 		warnDefaultInterfaceOnUnsupportedPlatform.Check()
 	}
@@ -136,7 +136,7 @@ func NewRouter(ctx context.Context, logFactory log.Factory, options option.Route
 		autoDetectInterface:   options.AutoDetectInterface,
 		defaultInterface:      options.DefaultInterface,
 		defaultMark:           options.DefaultMark,
-		enableLocalDNS:        enableLocalDNS,
+		enableLocalDNS:        options.EnableLocalDNS,
 	}
 	for i, ruleOptions := range options.Rules {
 		routeRule, err := NewRule(router, router.logger, ruleOptions)
