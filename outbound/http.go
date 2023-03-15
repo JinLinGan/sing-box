@@ -43,7 +43,7 @@ func NewHTTP(router adapter.Router, logger log.ContextLogger, tag string, option
 	}
 
 	authStr := ""
-	if options.Username != "" && options.Password != "" {
+	if options.Username != "" {
 		authStr = base64.StdEncoding.EncodeToString([]byte(options.Username + ":" + options.Password))
 	}
 	serverAddr := options.ServerOptions.Build()
