@@ -20,6 +20,7 @@ type RouteOptions struct {
 	DefaultInterface    string          `json:"default_interface,omitempty"`
 	DefaultMark         int             `json:"default_mark,omitempty"`
 	EnableLocalDNS      bool            `json:"enable_local_dns,omitempty"`
+	TraceConn           bool            `json:"trace_conn"`
 }
 
 type GeoIPOptions struct {

@@ -3,6 +3,8 @@ package route
 import (
 	"context"
 	"fmt"
+	"github.com/sagernet/sing-box/experimental/clashapi"
+	"github.com/sagernet/sing-box/experimental/clashapi/trafficontrol"
 	"io"
 	"net"
 	"net/http"
@@ -105,6 +107,7 @@ type Router struct {
 
 	// 启用本地dns
 	enableLocalDNS bool
+	trafficManager *trafficontrol.Manager
 }
 
 func NewRouter(ctx context.Context, logFactory log.Factory, options option.RouteOptions, dnsOptions option.DNSOptions, inbounds []option.Inbound) (*Router, error) {
@@ -116,6 +119,10 @@ func NewRouter(ctx context.Context, logFactory log.Factory, options option.Route
 	}
 	if options.FindProcess {
 		warnFindProcessOnUnsupportedPlatform.Check()
+	}
+	var trafficManager *trafficontrol.Manager
+	if options.TraceConn {
+		trafficManager = trafficontrol.NewManager()
 	}
 
 	router := &Router{
@@ -137,6 +144,7 @@ func NewRouter(ctx context.Context, logFactory log.Factory, options option.Route
 		defaultInterface:      options.DefaultInterface,
 		defaultMark:           options.DefaultMark,
 		enableLocalDNS:        options.EnableLocalDNS,
+		trafficManager:        trafficManager,
 	}
 	for i, ruleOptions := range options.Rules {
 		routeRule, err := NewRule(router, router.logger, ruleOptions)
@@ -588,6 +596,11 @@ func (r *Router) RouteConnection(ctx context.Context, conn net.Conn, metadata ad
 		conn.Close()
 		return E.New("missing supported outbound, closing connection")
 	}
+	if r.trafficManager != nil {
+		trackerConn := trafficontrol.NewTCPTracker(conn, r.trafficManager, clashapi.CastMetadata(metadata), r, matchedRule)
+		defer trackerConn.Leave()
+		conn = trackerConn
+	}
 	if r.clashServer != nil {
 		trackerConn, tracker := r.clashServer.RoutedConnection(ctx, conn, metadata, matchedRule)
 		defer tracker.Leave()
@@ -599,6 +612,17 @@ func (r *Router) RouteConnection(ctx context.Context, conn net.Conn, metadata ad
 		}
 	}
 	return detour.NewConnection(ctx, conn, metadata)
+}
+
+func (r *Router) CloseAllConn() {
+	if r.trafficManager != nil {
+		snapshot := r.trafficManager.Snapshot()
+		for _, connection := range snapshot.Connections {
+			connection.Close()
+			r.logger.Info("close connection ", connection.ID())
+		}
+
+	}
 }
 
 func (r *Router) RoutePacketConnection(ctx context.Context, conn N.PacketConn, metadata adapter.InboundContext) error {
@@ -666,6 +690,11 @@ func (r *Router) RoutePacketConnection(ctx context.Context, conn N.PacketConn, m
 	if !common.Contains(detour.Network(), N.NetworkUDP) {
 		conn.Close()
 		return E.New("missing supported outbound, closing packet connection")
+	}
+	if r.trafficManager != nil {
+		trackerConn := trafficontrol.NewUDPTracker(conn, r.trafficManager, clashapi.CastMetadata(metadata), r, matchedRule)
+		defer trackerConn.Leave()
+		conn = trackerConn
 	}
 	if r.clashServer != nil {
 		trackerConn, tracker := r.clashServer.RoutedPacketConnection(ctx, conn, metadata, matchedRule)

@@ -163,6 +163,10 @@ func (s *Server) RoutedPacketConnection(ctx context.Context, conn N.PacketConn, 
 	return tracker, tracker
 }
 
+func CastMetadata(metadata adapter.InboundContext) trafficontrol.Metadata {
+	return castMetadata(metadata)
+}
+
 func castMetadata(metadata adapter.InboundContext) trafficontrol.Metadata {
 	var inbound string
 	if metadata.Inbound != "" {
