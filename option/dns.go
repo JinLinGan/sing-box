@@ -12,7 +12,9 @@ import (
 type DNSOptions struct {
 	Servers []DNSServerOptions `json:"servers,omitempty"`
 	Rules   []DNSRule          `json:"rules,omitempty"`
-	Final   string             `json:"final,omitempty"`
+
+	RetryRules []DNSRule `json:"retry_rules,omitempty"`
+	Final      string    `json:"final,omitempty"`
 	DNSClientOptions
 }
 
@@ -92,18 +94,21 @@ type DefaultDNSRule struct {
 	SourceIPCIDR    Listable[string]       `json:"source_ip_cidr,omitempty"`
 	SourcePort      Listable[uint16]       `json:"source_port,omitempty"`
 	SourcePortRange Listable[string]       `json:"source_port_range,omitempty"`
-	Port            Listable[uint16]       `json:"port,omitempty"`
-	PortRange       Listable[string]       `json:"port_range,omitempty"`
-	ProcessName     Listable[string]       `json:"process_name,omitempty"`
-	ProcessPath     Listable[string]       `json:"process_path,omitempty"`
-	PackageName     Listable[string]       `json:"package_name,omitempty"`
-	User            Listable[string]       `json:"user,omitempty"`
-	UserID          Listable[int32]        `json:"user_id,omitempty"`
-	Outbound        Listable[string]       `json:"outbound,omitempty"`
-	ClashMode       string                 `json:"clash_mode,omitempty"`
-	Invert          bool                   `json:"invert,omitempty"`
-	Server          string                 `json:"server,omitempty"`
-	DisableCache    bool                   `json:"disable_cache,omitempty"`
+
+	DestIPCIDR Listable[string] `json:"dest_ip_cidr,omitempty"`
+
+	Port         Listable[uint16] `json:"port,omitempty"`
+	PortRange    Listable[string] `json:"port_range,omitempty"`
+	ProcessName  Listable[string] `json:"process_name,omitempty"`
+	ProcessPath  Listable[string] `json:"process_path,omitempty"`
+	PackageName  Listable[string] `json:"package_name,omitempty"`
+	User         Listable[string] `json:"user,omitempty"`
+	UserID       Listable[int32]  `json:"user_id,omitempty"`
+	Outbound     Listable[string] `json:"outbound,omitempty"`
+	ClashMode    string           `json:"clash_mode,omitempty"`
+	Invert       bool             `json:"invert,omitempty"`
+	Server       string           `json:"server,omitempty"`
+	DisableCache bool             `json:"disable_cache,omitempty"`
 }
 
 func (r DefaultDNSRule) IsValid() bool {

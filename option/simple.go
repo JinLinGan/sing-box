@@ -4,7 +4,8 @@ import "github.com/sagernet/sing/common/auth"
 
 type SocksInboundOptions struct {
 	ListenOptions
-	Users []auth.User `json:"users,omitempty"`
+	Users []auth.User        `json:"users,omitempty"`
+	TLS   *InboundTLSOptions `json:"tls,omitempty"`
 }
 
 type HTTPMixedInboundOptions struct {

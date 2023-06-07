@@ -25,7 +25,7 @@ func New(ctx context.Context, router adapter.Router, logger log.ContextLogger, o
 	case C.TypeDirect:
 		return NewDirect(ctx, router, logger, options.Tag, options.DirectOptions), nil
 	case C.TypeSocks:
-		return NewSocks(ctx, router, logger, options.Tag, options.SocksOptions), nil
+		return NewSocks(ctx, router, logger, options.Tag, options.SocksOptions)
 	case C.TypeHTTP:
 		return NewHTTP(ctx, router, logger, options.Tag, options.HTTPOptions)
 	case C.TypeMixed:
@@ -44,6 +44,8 @@ func New(ctx context.Context, router adapter.Router, logger log.ContextLogger, o
 		return NewShadowTLS(ctx, router, logger, options.Tag, options.ShadowTLSOptions)
 	case C.TypeVLESS:
 		return NewVLESS(ctx, router, logger, options.Tag, options.VLESSOptions)
+	case C.TypeSSH:
+		return NewSSH(ctx, router, logger, options.Tag, options.SSHOptions)
 	default:
 		return nil, E.New("unknown inbound type: ", options.Type)
 	}

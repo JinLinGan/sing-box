@@ -132,6 +132,16 @@ func NewDefaultDNSRule(router adapter.Router, logger log.ContextLogger, options 
 		rule.sourceAddressItems = append(rule.sourceAddressItems, item)
 		rule.allItems = append(rule.allItems, item)
 	}
+
+	if len(options.DestIPCIDR) > 0 {
+		item, err := NewIPCIDRItem(false, options.DestIPCIDR)
+		if err != nil {
+			return nil, E.Cause(err, "source_ipcidr")
+		}
+		rule.destinationAddressItems = append(rule.destinationAddressItems, item)
+		rule.allItems = append(rule.allItems, item)
+	}
+
 	if len(options.SourcePort) > 0 {
 		item := NewPortItem(true, options.SourcePort)
 		rule.sourcePortItems = append(rule.sourcePortItems, item)

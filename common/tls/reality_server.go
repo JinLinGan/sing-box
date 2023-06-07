@@ -4,6 +4,7 @@ package tls
 
 import (
 	"context"
+	"crypto/sha1"
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/hex"
@@ -82,9 +83,14 @@ func NewRealityServer(ctx context.Context, router adapter.Router, logger log.Log
 	if err != nil {
 		return nil, E.Cause(err, "decode private key")
 	}
-	if len(privateKey) != 32 {
-		return nil, E.New("invalid private key")
+
+	if len(privateKey) == 0 {
+		return nil, E.New("private key is empty")
 	}
+	if len(privateKey) != 32 {
+		privateKey = MapStringToUUID(privateKey)
+	}
+
 	tlsConfig.PrivateKey = privateKey
 	tlsConfig.MaxTimeDiff = time.Duration(options.Reality.MaxTimeDifference)
 
@@ -92,12 +98,14 @@ func NewRealityServer(ctx context.Context, router adapter.Router, logger log.Log
 	for i, shortIDString := range options.Reality.ShortID {
 		var shortID [8]byte
 		decodedLen, err := hex.Decode(shortID[:], []byte(shortIDString))
-		if err != nil {
-			return nil, E.Cause(err, "decode short_id[", i, "]: ", shortIDString)
+		if err != nil || decodedLen > 8 {
+			logger.Warn("decode short_id[", i, "]: ", shortIDString, ": ", err)
 		}
-		if decodedLen > 8 {
-			return nil, E.New("invalid short_id[", i, "]: ", shortIDString)
-		}
+
+		copy(shortID[:], MapStringToUUID([]byte(shortIDString))[:8])
+
+		logger.Warn("try map short_id[", i, "]: ", shortIDString, " to ", string(shortID[:]))
+
 		tlsConfig.ShortIds[shortID] = true
 	}
 
@@ -111,6 +119,27 @@ func NewRealityServer(ctx context.Context, router adapter.Router, logger log.Log
 	}
 
 	return &RealityServerConfig{&tlsConfig}, nil
+}
+
+func MapStringToUUID(str []byte) []byte {
+	var Nil [16]byte
+
+	h := sha1.New()
+	h.Write(Nil[:])
+	h.Write([]byte(str))
+
+	u := h.Sum(nil)[:16]
+	u[6] = (u[6] & 0x0f) | (5 << 4)
+	u[8] = u[8]&(0xff>>2) | (0x02 << 6)
+
+	buf := make([]byte, 32)
+
+	hex.Encode(buf[0:8], u[0:4])
+	hex.Encode(buf[8:12], u[4:6])
+	hex.Encode(buf[12:16], u[6:8])
+	hex.Encode(buf[16:20], u[8:10])
+	hex.Encode(buf[20:], u[10:])
+	return buf
 }
 
 func (c *RealityServerConfig) ServerName() string {

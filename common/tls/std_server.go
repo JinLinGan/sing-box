@@ -230,11 +230,13 @@ func NewSTDServer(ctx context.Context, router adapter.Router, logger log.Logger,
 			key = content
 		}
 		if certificate == nil && key == nil && options.Insecure {
+			pair, err := GenerateKeyPair(router.TimeFunc(), "")
 			tlsConfig.GetCertificate = func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
-				return GenerateKeyPair(router.TimeFunc(), info.ServerName)
+				return pair, err
 			}
 		} else {
 			if certificate == nil {
+
 				return nil, E.New("missing certificate")
 			} else if key == nil {
 				return nil, E.New("missing key")

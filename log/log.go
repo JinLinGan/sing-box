@@ -1,6 +1,7 @@
 package log
 
 import (
+	"gopkg.in/natefinch/lumberjack.v2"
 	"io"
 	"os"
 	"time"
@@ -52,6 +53,7 @@ func New(options Options) (Factory, error) {
 
 	var logFile *os.File
 	var logWriter io.Writer
+	isFile := false
 
 	switch logOptions.Output {
 	case "":
@@ -64,17 +66,30 @@ func New(options Options) (Factory, error) {
 	case "stdout":
 		logWriter = os.Stdout
 	default:
-		var err error
-		logFile, err = os.OpenFile(C.BasePath(logOptions.Output), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-		if err != nil {
-			return nil, err
+		isFile = true
+		if options.Options.MaxAge != 0 || options.Options.MaxSize != 0 || options.Options.MaxBackups != 0 {
+			logger := &lumberjack.Logger{
+				LocalTime:  true,
+				Filename:   C.BasePath(logOptions.Output),
+				MaxSize:    logOptions.MaxSize,
+				MaxBackups: logOptions.MaxBackups,
+				MaxAge:     logOptions.MaxAge,
+			}
+			logWriter = logger
+		} else {
+			var err error
+			logFile, err = os.OpenFile(C.BasePath(logOptions.Output), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+			if err != nil {
+				return nil, err
+			}
+			logWriter = logFile
 		}
-		logWriter = logFile
+
 	}
 	logFormatter := Formatter{
 		BaseTime:         options.BaseTime,
-		DisableColors:    logOptions.DisableColor || logFile != nil,
-		DisableTimestamp: !logOptions.Timestamp && logFile != nil,
+		DisableColors:    logOptions.DisableColor || isFile,
+		DisableTimestamp: !logOptions.Timestamp && isFile,
 		FullTimestamp:    logOptions.Timestamp,
 		TimestampFormat:  "-0700 2006-01-02 15:04:05",
 	}

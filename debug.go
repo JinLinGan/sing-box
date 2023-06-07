@@ -3,6 +3,7 @@
 package box
 
 import (
+	"github.com/sagernet/sing-box/experimental"
 	"runtime/debug"
 
 	"github.com/sagernet/sing-box/common/dialer/conntrack"
@@ -31,5 +32,8 @@ func applyDebugOptions(options option.DebugOptions) {
 	}
 	if options.OOMKiller != nil {
 		conntrack.KillerEnabled = *options.OOMKiller
+	}
+	if options.PprofListen != "" {
+		experimental.PprofServer(options.PprofListen)
 	}
 }

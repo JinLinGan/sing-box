@@ -42,5 +42,8 @@ type LogOptions struct {
 	Level        string `json:"level,omitempty"`
 	Output       string `json:"output,omitempty"`
 	Timestamp    bool   `json:"timestamp,omitempty"`
+	MaxSize      int    `json:"max_size,omitempty"`
+	MaxBackups   int    `json:"max_backups,omitempty"`
+	MaxAge       int    `json:"max_age,omitempty"`
 	DisableColor bool   `json:"-"`
 }

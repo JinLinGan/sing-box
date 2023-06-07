@@ -2,6 +2,7 @@ package route
 
 import (
 	"context"
+	M "github.com/sagernet/sing/common/metadata"
 	"net/netip"
 	"strings"
 
@@ -44,6 +45,32 @@ func (r *Router) matchDNS(ctx context.Context) (context.Context, dns.Transport, 
 	}
 }
 
+func (r *Router) reMatchDNS(ctx context.Context, addresses []netip.Addr) (context.Context, dns.Transport, dns.DomainStrategy) {
+	metadata := adapter.ContextFrom(ctx)
+	if metadata == nil {
+		panic("no context")
+	}
+	metadata.DestinationAddresses = addresses
+	for i, rule := range r.dnsRetryRules {
+		if rule.Match(metadata) {
+			if rule.DisableCache() {
+				ctx = dns.ContextWithDisableCache(ctx, true)
+			}
+			detour := rule.Outbound()
+			r.dnsLogger.DebugContext(ctx, "rematch[", i, "] ", rule.String(), " => ", detour)
+			if transport, loaded := r.transportMap[detour]; loaded {
+				if domainStrategy, dsLoaded := r.transportDomainStrategy[transport]; dsLoaded {
+					return ctx, transport, domainStrategy
+				} else {
+					return ctx, transport, r.defaultDomainStrategy
+				}
+			}
+			r.dnsLogger.ErrorContext(ctx, "transport not found: ", detour)
+		}
+	}
+	return nil, nil, dns.DomainStrategyAsIS
+}
+
 func (r *Router) Exchange(ctx context.Context, message *mDNS.Msg) (*mDNS.Msg, error) {
 	if len(message.Question) > 0 {
 		r.dnsLogger.DebugContext(ctx, "exchange ", formatQuestion(message.Question[0].String()))
@@ -69,7 +96,44 @@ func (r *Router) Exchange(ctx context.Context, message *mDNS.Msg) (*mDNS.Msg, er
 	if len(message.Question) > 0 && response != nil {
 		LogDNSAnswers(r.dnsLogger, ctx, message.Question[0].Name, response.Answer)
 	}
+
+	addresses := messageToAddresses(response)
+
+	ctx, secondTransport, secondStrategy := r.reMatchDNS(ctx, addresses)
+	if secondTransport != nil {
+		ctx, cancel := context.WithTimeout(ctx, C.DNSTimeout)
+		defer cancel()
+		secondResponse, secondErr := r.dnsClient.Exchange(ctx, secondTransport, message, secondStrategy)
+		if err != nil && len(message.Question) > 0 {
+			return response, err
+			r.dnsLogger.ErrorContext(ctx, E.Cause(err, "exchange failed for ", formatQuestion(message.Question[0].String())))
+		}
+		if len(message.Question) > 0 && secondResponse != nil {
+			LogDNSAnswers(r.dnsLogger, ctx, message.Question[0].Name, response.Answer)
+			return secondResponse, secondErr
+		}
+
+	}
+
 	return response, err
+}
+
+func messageToAddresses(response *mDNS.Msg) []netip.Addr {
+	if response.Rcode != mDNS.RcodeSuccess {
+		return nil
+	} else if len(response.Answer) == 0 {
+		return nil
+	}
+	addresses := make([]netip.Addr, 0, len(response.Answer))
+	for _, rawAnswer := range response.Answer {
+		switch answer := rawAnswer.(type) {
+		case *mDNS.A:
+			addresses = append(addresses, M.AddrFromIP(answer.A))
+		case *mDNS.AAAA:
+			addresses = append(addresses, M.AddrFromIP(answer.AAAA))
+		}
+	}
+	return addresses
 }
 
 func (r *Router) Lookup(ctx context.Context, domain string, strategy dns.DomainStrategy) ([]netip.Addr, error) {
@@ -91,7 +155,23 @@ func (r *Router) Lookup(ctx context.Context, domain string, strategy dns.DomainS
 			err = dns.RCodeNameError
 		}
 	}
-	return addrs, err
+
+	ctx, secondTransport, secondStrategy := r.reMatchDNS(ctx, addrs)
+	if secondTransport != nil {
+		ctx, cancel := context.WithTimeout(ctx, C.DNSTimeout)
+		defer cancel()
+		secondAddrs, secondErr := r.dnsClient.Lookup(ctx, secondTransport, domain, secondStrategy)
+		if len(addrs) > 0 {
+			r.dnsLogger.InfoContext(ctx, "lookup succeed for ", domain, ": ", strings.Join(F.MapToString(secondAddrs), " "))
+			return secondAddrs, secondErr
+		} else {
+			r.dnsLogger.ErrorContext(ctx, E.Cause(err, "lookup failed for ", domain))
+			return addrs, err
+		}
+	} else {
+		return addrs, err
+	}
+
 }
 
 func (r *Router) LookupDefault(ctx context.Context, domain string) ([]netip.Addr, error) {

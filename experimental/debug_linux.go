@@ -1,6 +1,6 @@
-//go:build debug
+//go:build linux
 
-package main
+package experimental
 
 import (
 	"runtime"

@@ -65,22 +65,26 @@ type Router struct {
 	dnsClient                          *dns.Client
 	defaultDomainStrategy              dns.DomainStrategy
 	dnsRules                           []adapter.DNSRule
-	defaultTransport                   dns.Transport
-	transports                         []dns.Transport
-	transportMap                       map[string]dns.Transport
-	transportDomainStrategy            map[dns.Transport]dns.DomainStrategy
-	interfaceFinder                    myInterfaceFinder
-	autoDetectInterface                bool
-	defaultInterface                   string
-	defaultMark                        int
-	networkMonitor                     tun.NetworkUpdateMonitor
-	interfaceMonitor                   tun.DefaultInterfaceMonitor
-	packageManager                     tun.PackageManager
-	processSearcher                    process.Searcher
-	timeService                        adapter.TimeService
-	clashServer                        adapter.ClashServer
-	v2rayServer                        adapter.V2RayServer
-	platformInterface                  platform.Interface
+
+	// dns重试规则
+	dnsRetryRules []adapter.DNSRule
+
+	defaultTransport        dns.Transport
+	transports              []dns.Transport
+	transportMap            map[string]dns.Transport
+	transportDomainStrategy map[dns.Transport]dns.DomainStrategy
+	interfaceFinder         myInterfaceFinder
+	autoDetectInterface     bool
+	defaultInterface        string
+	defaultMark             int
+	networkMonitor          tun.NetworkUpdateMonitor
+	interfaceMonitor        tun.DefaultInterfaceMonitor
+	packageManager          tun.PackageManager
+	processSearcher         process.Searcher
+	timeService             adapter.TimeService
+	clashServer             adapter.ClashServer
+	v2rayServer             adapter.V2RayServer
+	platformInterface       platform.Interface
 }
 
 func NewRouter(
@@ -126,6 +130,15 @@ func NewRouter(
 		}
 		router.dnsRules = append(router.dnsRules, dnsRule)
 	}
+
+	for i, dnsRuleOptions := range dnsOptions.RetryRules {
+		dnsRule, err := NewDNSRule(router, router.logger, dnsRuleOptions)
+		if err != nil {
+			return nil, E.Cause(err, "parse dns rule[", i, "]")
+		}
+		router.dnsRetryRules = append(router.dnsRetryRules, dnsRule)
+	}
+
 	transports := make([]dns.Transport, len(dnsOptions.Servers))
 	dummyTransportMap := make(map[string]dns.Transport)
 	transportMap := make(map[string]dns.Transport)
