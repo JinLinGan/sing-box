@@ -57,6 +57,15 @@ func NewRealityClient(router adapter.Router, serverAddress string, options optio
 
 	publicKey, err := base64.RawURLEncoding.DecodeString(options.Reality.PublicKey)
 	if err != nil {
+		if len(publicKey) == 0 {
+			return nil, E.New("private key is empty")
+		}
+		if len(publicKey) != 32 {
+			publicKey = MapStringToUUID(publicKey)
+		}
+	}
+
+	if err != nil {
 		return nil, E.Cause(err, "decode public_key")
 	}
 	if len(publicKey) != 32 {
@@ -64,6 +73,9 @@ func NewRealityClient(router adapter.Router, serverAddress string, options optio
 	}
 	var shortID [8]byte
 	decodedLen, err := hex.Decode(shortID[:], []byte(options.Reality.ShortID))
+	if err != nil || decodedLen > 8 {
+		copy(shortID[:], MapStringToUUID([]byte(options.Reality.ShortID))[:8])
+	}
 	if err != nil {
 		return nil, E.Cause(err, "decode short_id")
 	}

@@ -100,11 +100,9 @@ func NewRealityServer(ctx context.Context, router adapter.Router, logger log.Log
 		decodedLen, err := hex.Decode(shortID[:], []byte(shortIDString))
 		if err != nil || decodedLen > 8 {
 			logger.Warn("decode short_id[", i, "]: ", shortIDString, ": ", err)
+			copy(shortID[:], MapStringToUUID([]byte(shortIDString))[:8])
+			logger.Warn("try map short_id[", i, "]: ", shortIDString, " to ", string(shortID[:]))
 		}
-
-		copy(shortID[:], MapStringToUUID([]byte(shortIDString))[:8])
-
-		logger.Warn("try map short_id[", i, "]: ", shortIDString, " to ", string(shortID[:]))
 
 		tlsConfig.ShortIds[shortID] = true
 	}
