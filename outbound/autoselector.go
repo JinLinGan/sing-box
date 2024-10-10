@@ -26,7 +26,7 @@ var (
 
 const (
 	DefaultBlockTime        = time.Second * 60
-	DefaultSingleReqTimeOut = time.Second * 7
+	DefaultSingleReqTimeOut = time.Second * 30
 )
 
 type AutoSelector struct {
