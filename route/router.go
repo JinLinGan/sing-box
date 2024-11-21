@@ -1121,3 +1121,9 @@ func (r *Router) DeleteOutBounds(outbounds []string) {
 		delete(r.outboundByTag, outbound)
 	}
 }
+
+// Warining!!!: unsafe function.
+// Should call before traffic into inbound
+func (r *Router) PushRulesInFront(rules ...adapter.Rule) {
+	r.rules = append(rules, r.rules...)
+}
